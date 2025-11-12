@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 
-import AuraDoodle, { type AuraAccessory, type AuraState } from './components/AuraDoodle';
+import AuraDoodle, { type AuraState } from './components/AuraDoodle';
 
 // Define the structure for a chat message
 interface ChatMessage {
@@ -99,6 +99,8 @@ export default function AssistantPage() {
   const [isDictating, setIsDictating] = useState(false);
   const [dictationTranscript, setDictationTranscript] = useState('');
   const [dictationSummary, setDictationSummary] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<'dialogue' | 'briefing' | 'dictation' | 'macros'>('dialogue');
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -154,15 +156,11 @@ export default function AssistantPage() {
 
   const currentAuraStatus = auraStatusMeta[auraState];
 
-  const modeConfigs = useMemo<Record<
-    'strategic' | 'creative' | 'analytical',
-    { label: string; blurb: string; accessory: AuraAccessory; commands: string[] }
-  >>(
+  const modeConfigs = useMemo<Record<'strategic' | 'creative' | 'analytical', { label: string; blurb: string; commands: string[] }>>(
     () => ({
       strategic: {
         label: 'Strategic',
         blurb: 'Shape direction, align stakeholders, and translate vision into decisive action.',
-        accessory: 'clipboard',
         commands: [
           'Summarize my inbox in 3 bullets with next actions',
           'Draft a confident investor update referencing ARR momentum',
@@ -173,7 +171,6 @@ export default function AssistantPage() {
       creative: {
         label: 'Creative',
         blurb: 'Generate inspired narratives, naming, and experiential concepts on demand.',
-        accessory: 'basketball',
         commands: [
           'Craft a launch teaser script for Aura in under 45 seconds',
           'Invent three visionary taglines for an AI command studio',
@@ -184,7 +181,6 @@ export default function AssistantPage() {
       analytical: {
         label: 'Analytical',
         blurb: 'Interrogate data, surface outliers, and compress research into insights.',
-        accessory: 'datapad',
         commands: [
           'Compare this week’s support volume against the 6-week average',
           'Summarize today’s top AI research headlines with key implications',
@@ -199,6 +195,55 @@ export default function AssistantPage() {
   const modeProfile = modeConfigs[mode];
 
   const quickCommands = useMemo(() => modeProfile.commands, [modeProfile]);
+
+  const panels: Array<{ id: typeof activePanel; label: string; caption: string }> = [
+    { id: 'dialogue', label: 'Dialogue', caption: 'Live conversation feed' },
+    { id: 'briefing', label: 'Briefing', caption: 'Daily mission intel' },
+    { id: 'dictation', label: 'Dictation', caption: 'Whisper-to-write studio' },
+    { id: 'macros', label: 'Macros', caption: 'Preset mission sequences' },
+  ];
+
+  const panelThemes = useMemo<
+    Record<
+      typeof activePanel,
+      {
+        gradient: string;
+        border: string;
+        accent: string;
+        tabActive: string;
+      }
+    >
+  >(
+    () => ({
+      dialogue: {
+        gradient: 'linear-gradient(145deg, rgba(38,45,89,0.78), rgba(18,23,52,0.88))',
+        border: 'border-indigo-400/20',
+        accent: 'text-indigo-200',
+        tabActive: 'border-indigo-300/60 bg-indigo-500/20 shadow-[0_12px_32px_rgba(99,102,241,0.35)]',
+      },
+      briefing: {
+        gradient: 'linear-gradient(145deg, rgba(25,60,78,0.78), rgba(15,28,44,0.88))',
+        border: 'border-cyan-400/20',
+        accent: 'text-cyan-200',
+        tabActive: 'border-cyan-300/60 bg-cyan-500/20 shadow-[0_12px_32px_rgba(56,189,248,0.35)]',
+      },
+      dictation: {
+        gradient: 'linear-gradient(145deg, rgba(26,70,58,0.78), rgba(12,31,32,0.88))',
+        border: 'border-emerald-400/20',
+        accent: 'text-emerald-200',
+        tabActive: 'border-emerald-300/60 bg-emerald-500/20 shadow-[0_12px_32px_rgba(16,185,129,0.35)]',
+      },
+      macros: {
+        gradient: 'linear-gradient(145deg, rgba(71,47,89,0.78), rgba(32,22,55,0.9))',
+        border: 'border-violet-400/20',
+        accent: 'text-violet-200',
+        tabActive: 'border-violet-300/60 bg-violet-500/20 shadow-[0_12px_32px_rgba(139,92,246,0.35)]',
+      },
+    }),
+    []
+  );
+
+  const activeTheme = panelThemes[activePanel];
 
   const macroSequences = useMemo(
     () => [
@@ -319,21 +364,6 @@ export default function AssistantPage() {
     ],
     [formattedTime, formattedDate, modeProfile.label]
   );
-
-  const auraMoodGradient = useMemo(() => {
-    switch (auraMood) {
-      case 'uplift':
-        return 'from-emerald-400/35 via-sky-300/25 to-indigo-400/30';
-      case 'alert':
-        return 'from-amber-500/45 via-rose-500/35 to-red-500/45';
-      case 'focus':
-        return 'from-cyan-400/40 via-indigo-500/30 to-purple-500/30';
-      default:
-        return 'from-indigo-500/30 via-violet-500/25 to-sky-500/30';
-    }
-  }, [auraMood]);
-
-  const auraMoodPulse = useMemo(() => (auraMood === 'alert' ? 'animate-pulse' : 'animate-none'), [auraMood]);
 
   const lastModelMessage = useMemo(() => {
     for (let i = history.length - 1; i >= 0; i -= 1) {
@@ -735,26 +765,24 @@ export default function AssistantPage() {
     setHasInteracted(true);
   }, []);
 
-  const showAuraTrail = auraState === 'speaking' || auraState === 'thinking';
-
   return (
-    <main className="px-6 py-10 lg:px-12">
-      <div className="max-w-7xl mx-auto flex flex-col gap-10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative h-12 w-12 rounded-2xl border border-white/20 bg-linear-to-br from-indigo-500/40 via-violet-500/30 to-sky-500/35 shadow-[0_18px_34px_rgba(27,33,85,0.5)]">
-              <span className="absolute inset-[3px] rounded-[14px] bg-slate-950/80 backdrop-blur flex items-center justify-center text-lg font-semibold text-white">
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+      <div className="mx-auto flex min-h-screen w-full flex-col gap-6 px-4 py-6 md:px-6 lg:px-10">
+        <header className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 px-5 py-6 shadow-[0_18px_40px_rgba(14,20,40,0.45)] md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+            <div className="relative h-12 w-12 shrink-0 rounded-2xl border border-white/15 bg-linear-to-br from-indigo-500/40 via-sky-500/30 to-cyan-500/30 shadow-[0_18px_34px_rgba(27,33,85,0.5)]">
+              <span className="absolute inset-[3px] flex items-center justify-center rounded-[14px] bg-slate-950/80 text-lg font-semibold text-white">
                 {userName.charAt(0).toUpperCase()}
               </span>
-              <span className="absolute -inset-[4px] rounded-[18px] border border-white/10 opacity-60 blur-sm"></span>
+              <span className="absolute -inset-[4px] rounded-[18px] border border-white/10 opacity-60 blur-sm" />
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.35em] text-slate-400/80">Hello, {userName}</p>
-              <p className="text-xl font-semibold text-white">{greetingHeading}</p>
-              <p className="text-sm text-slate-300/80">{greetingSubtext}</p>
+              <p className="text-xl font-semibold text-white md:text-2xl">{greetingHeading}</p>
+              <p className="text-sm text-slate-300/80 md:text-base">{greetingSubtext}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 md:justify-end">
             {headerBadges.map((badge) => (
               <div
                 key={badge.label}
@@ -766,367 +794,357 @@ export default function AssistantPage() {
               </div>
             ))}
           </div>
-        </div>
-        <header className="flex flex-col gap-6">
-          <div className="pill self-start backdrop-blur">
-            <span className="h-2 w-2 rounded-full bg-emerald-400/80 shadow-[0_0_12px_rgba(52,211,153,0.75)]"></span>
-            Aura Command Studio
-          </div>
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-4 max-w-3xl">
-              <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white">
-                Reimagine how you brief, command, and collaborate with <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-300 via-sky-400 to-emerald-300">Aura</span>.
-              </h1>
-              <p className="text-base sm:text-lg text-slate-300 leading-relaxed">
-                An orchestrated workspace engineered for multimodal intelligence. Whisper a task, Aura synthesizes it into actionable strategy—voice, text, briefing, and visualization in one command surface.
-              </p>
-            </div>
-            <div className="glass-panel glimmer px-6 py-5 flex items-center gap-4 self-stretch lg:self-auto">
-              <div className="relative">
-                <span className={`absolute inset-0 rounded-full ${currentAuraStatus.pulse} blur-md opacity-60 animate-ping-slow`}></span>
-                <span className={`inline-flex h-10 w-10 items-center justify-center rounded-full border ${currentAuraStatus.badge}`}>
-                  <span className="h-2 w-2 rounded-full bg-current animate-pulse"></span>
-                </span>
-              </div>
-              <div>
-                <p className="text-sm uppercase tracking-[0.28em] text-slate-400">Aura status</p>
-                <p className="text-lg font-medium text-white">{currentAuraStatus.label}</p>
-                <p className="text-sm text-slate-300/80">{currentAuraStatus.tone}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/6 p-1 backdrop-blur">
-              {Object.entries(modeConfigs).map(([key, profile]) => {
-                const active = key === mode;
-                return (
-                  <Button
-                    key={key}
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setMode(key as typeof mode)}
-                    className={`h-9 rounded-full px-4 text-xs font-medium tracking-[0.2em] uppercase ${
-                      active
-                        ? 'bg-linear-to-r from-indigo-400/70 to-sky-400/70 text-white shadow-[0_8px_20px_rgba(66,90,255,0.35)]'
-                        : 'text-slate-300'
-                    }`}
-                  >
-                    {profile.label}
-                  </Button>
-                );
-              })}
-            </div>
-            <p className="text-sm text-slate-300/90 max-w-3xl">{modeProfile.blurb}</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {sessionMetrics.map((metric) => (
-              <div key={metric.label} className="glass-panel glimmer rounded-2xl border border-white/10 bg-white/6 px-5 py-4">
-                <p className="text-xs uppercase tracking-[0.28em] text-slate-400/80">{metric.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{metric.value}</p>
-                <p className="mt-1 text-sm text-slate-300/80">{metric.status}</p>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {quickCommands.map((command) => (
-              <Button
-                key={command}
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  injectPrompt(command);
-                }}
-                className="group/pill border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white transition-all duration-150 rounded-full px-5 py-2 h-auto"
-              >
-                <span className="mr-2 inline-flex h-2 w-2 rounded-full bg-white/50 group-hover/pill:bg-white"></span>
-                {command}
-              </Button>
-            ))}
-          </div>
         </header>
 
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <section className="glass-panel glimmer flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-white/10 pb-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Live Dialogue</p>
-                <h2 className="text-2xl font-semibold text-white mt-1">Conversation Stream</h2>
+        <div className="mt-6 flex flex-1 min-h-0 flex-col gap-6 overflow-hidden lg:flex-row">
+          <aside
+            className={`${isFocusMode ? 'hidden' : 'flex'} w-full min-h-0 flex-col gap-4 overflow-hidden lg:w-[280px]`}
+          >
+            <div className="glass-panel glimmer flex flex-col items-center gap-6 rounded-3xl px-6 py-6">
+              <AuraDoodle state={getAuraState()} />
+              <div className="text-center">
+                <p className="text-xs uppercase tracking-[0.35em] text-slate-400/80">Aura status</p>
+                <p className="text-lg font-semibold text-white">{currentAuraStatus.label}</p>
+                <p className="text-sm text-slate-300/80">{currentAuraStatus.tone}</p>
               </div>
-              <div className="flex flex-col items-end gap-2 text-sm text-slate-300">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
-                    <span className={`h-2 w-2 rounded-full ${hasInteracted ? 'bg-emerald-300' : 'bg-slate-400/70'} animate-pulse`}></span>
-                    {hasInteracted ? 'Syncing session' : 'Awaiting first prompt'}
-                  </span>
-                  {lastModelMessage && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleExport('slides')}
-                        className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.18em]"
-                      >
-                        Export Slides
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleExport('document')}
-                        className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.18em]"
-                      >
-                        Export Narrative
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleExport('email')}
-                        className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.18em]"
-                      >
-                        Export Email
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                {exportFeedback && (
-                  <p className="text-xs text-slate-300/80">{exportFeedback}</p>
-                )}
+              <div className="grid w-full gap-3">
+                {sessionMetrics.map((metric) => (
+                  <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                    <p className="text-[0.65rem] uppercase tracking-[0.32em] text-slate-400/80">{metric.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-white">{metric.value}</p>
+                    <p className="text-xs text-slate-300/80">{metric.status}</p>
+                  </div>
+                ))}
               </div>
             </div>
-          <div
-            ref={chatContainerRef}
-            className="flex-1 overflow-y-auto space-y-5 px-6 py-6 pr-4 custom-scrollbar"
-            role="log"
-            aria-live="polite"
-            aria-relevant="additions text"
-          >
-              {history.length === 0 && !isLoading && (
-                <div className="rounded-3xl border border-dashed border-white/10 bg-white/3 px-6 py-12 text-center text-slate-300">
-                  <p className="text-lg font-medium text-white mb-2">Your command surface awaits</p>
-                  <p className="text-sm leading-relaxed text-slate-300/80">
-                    Try “Outline a product launch timeline” or press the listening control to brief Aura with your voice.
-                  </p>
+
+            <div className="glass-panel glimmer flex min-h-0 flex-col rounded-3xl px-6 py-5">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Quick prompts</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setMode((prev) => (prev === 'strategic' ? 'creative' : prev === 'creative' ? 'analytical' : 'strategic'))}
+                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-[0.6rem] uppercase tracking-[0.28em] text-slate-200 hover:bg-white/10"
+                >
+                  Cycle Mode
+                </Button>
+              </div>
+              <div className="mt-3 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
+                <div className="flex flex-wrap gap-2">
+                  {quickCommands.map((command) => (
+                    <Button
+                      key={command}
+                      type="button"
+                      variant="ghost"
+                      onClick={() => injectPrompt(command)}
+                      className="border border-white/10 bg-white/5 px-4 py-2 text-xs text-slate-200 transition hover:bg-white/10 hover:text-white"
+                    >
+                      {command}
+                    </Button>
+                  ))}
                 </div>
-              )}
-              {history.map((msg, index) => {
-                const isUser = msg.role === 'user';
-                return (
-                  <div key={`${msg.role}-${index}`} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[78%] rounded-3xl px-5 py-4 shadow-[0_18px_36px_rgba(6,12,30,0.35)] transition-transform ${
-                        isUser
-                          ? 'bg-linear-to-br from-indigo-500/80 via-violet-500/75 to-purple-500/80 text-white border border-white/10 translate-y-0 focus-within:-translate-y-px'
-                          : 'bg-white/5 border border-white/8 backdrop-blur-xl text-slate-100'
+              </div>
+            </div>
+
+            <div className="glass-panel glimmer hidden flex-col gap-5 rounded-3xl px-6 py-6 lg:flex">
+              <div className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Command console</div>
+              <p className="text-sm text-slate-300/80">
+                Access full command controls inside the dialogue panel.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setActivePanel('dialogue')}
+                className="rounded-full border-white/20 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.28em] text-slate-200 hover:bg-white/10"
+              >
+                Open Dialogue Panel
+              </Button>
+            </div>
+          </aside>
+
+          <section
+            className={`relative flex flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border backdrop-blur-xl md:min-w-[480px] ${activeTheme.border}`}
+            style={{
+              background: activeTheme.gradient,
+            }}
+          >
+            <div className="flex flex-col gap-4 border-b border-white/10 px-5 py-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap gap-2">
+                {panels.map((panel) => {
+                  const isActive = activePanel === panel.id;
+                  return (
+                    <Button
+                      key={panel.id}
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setActivePanel(panel.id)}
+                      className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.32em] transition ${
+                        isActive
+                          ? `${activeTheme.tabActive} text-white`
+                          : 'border-white/10 bg-white/4 text-slate-300 hover:bg-white/8 hover:text-white'
                       }`}
                     >
-                      <strong className={`block text-xs uppercase tracking-[0.35em] mb-3 ${isUser ? 'text-white/70' : 'text-indigo-200/80'}`}>
-                        {isUser ? 'You' : 'Aura'}
-                      </strong>
-                      <div className="space-y-2">{renderMessageContent(msg)}</div>
-                    </div>
+                      {panel.label}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setIsFocusMode((prev) => !prev)}
+                  className={`rounded-full border px-3 py-2 text-[0.65rem] uppercase tracking-[0.28em] transition ${
+                    isFocusMode
+                      ? 'border-white/20 bg-white/12 text-white'
+                      : 'border-white/10 bg-white/6 text-slate-200 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {isFocusMode ? 'Exit Focus' : 'Focus Mode'}
+                </Button>
+                <p className={`text-xs tracking-[0.28em] ${activeTheme.accent}`}>
+                  {panels.find((panel) => panel.id === activePanel)?.caption}
+                </p>
+              </div>
+            </div>
+
+            <div className="relative flex-1 min-h-0 overflow-hidden px-6 py-6">
+              {activePanel === 'dialogue' && (
+                <div className="flex h-full min-h-0 flex-col gap-4">
+                  <div className="flex flex-col gap-3 text-xs text-slate-200/90 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1">
+                      <span className={`h-2 w-2 rounded-full ${hasInteracted ? 'bg-emerald-300' : 'bg-slate-400/70'} animate-pulse`} />
+                      {hasInteracted ? 'Session live' : 'Awaiting first prompt'}
+                    </span>
+                    {lastModelMessage && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleExport('slides')} className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em]">
+                          Slides
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleExport('document')} className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em]">
+                          Narrative
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleExport('email')} className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.22em]">
+                          Email
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="max-w-[70%] rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-slate-100">
-                    <strong className="block text-xs uppercase tracking-[0.35em] mb-3 text-indigo-200/80">Aura</strong>
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-indigo-300 animate-bounce"></span>
-                      <span className="h-2.5 w-2.5 rounded-full bg-indigo-200 animate-bounce delay-150"></span>
-                      <span className="h-2.5 w-2.5 rounded-full bg-indigo-100 animate-bounce delay-300"></span>
+                  {exportFeedback && <p className="text-xs text-slate-200/80">{exportFeedback}</p>}
+                  <div className="rounded-2xl border border-white/12 bg-white/[0.08] px-4 py-4 shadow-[0_16px_32px_rgba(8,13,30,0.35)]">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-[0.6rem] uppercase tracking-[0.32em] text-slate-300/80">Command console</p>
+                        <p className="text-base font-semibold text-white">Deploy a new task</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          onClick={startListening}
+                          disabled={isListening || isLoading}
+                          aria-label={isListening ? 'Aura is currently listening' : 'Activate voice briefing'}
+                          className="rounded-full border border-white/20 bg-linear-to-r from-indigo-500/80 to-violet-500/80 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-white shadow-[0_8px_24px_rgba(66,77,255,0.4)] transition hover:scale-[1.01]"
+                        >
+                          {isListening ? 'Listening…' : 'Voice Brief'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setIsFocusMode((prev) => !prev)}
+                          className={`rounded-full border px-3 py-2 text-[0.6rem] uppercase tracking-[0.28em] transition ${
+                            isFocusMode ? 'border-white/20 bg-white/10 text-white' : 'border-white/15 bg-white/6 text-slate-200 hover:bg-white/10'
+                          }`}
+                        >
+                          {isFocusMode ? 'Exit Focus' : 'Focus Mode'}
+                        </Button>
+                      </div>
                     </div>
+                    <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+                      <Input
+                        type="text"
+                        value={userInput}
+                        onChange={(e) => {
+                          setUserInput(e.target.value);
+                          setIsTyping(e.target.value.length > 0);
+                        }}
+                        onFocus={() => setIsTyping(userInput.length > 0)}
+                        onBlur={() => setIsTyping(false)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSubmit();
+                        }}
+                        placeholder={isListening ? 'Listening…' : 'Compose your directive'}
+                        className="h-11 flex-1 rounded-xl border border-white/12 bg-white/8 px-4 text-sm text-slate-100 placeholder:text-slate-400/70 focus-visible:ring-indigo-400"
+                        disabled={isLoading || isListening}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleSubmit()}
+                          disabled={isLoading || isListening || !userInput.trim()}
+                          aria-live="polite"
+                          aria-busy={isLoading}
+                          className="h-11 rounded-xl bg-linear-to-r from-indigo-400 via-violet-500 to-purple-500 px-4 text-xs font-semibold uppercase tracking-[0.28em] text-white shadow-[0_12px_32px_rgba(91,95,255,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isLoading ? 'Synthesizing…' : 'Transmit'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            setUserInput('');
+                            setIsTyping(false);
+                          }}
+                          disabled={!userInput && !isTyping}
+                          className="h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-xs uppercase tracking-[0.28em] text-slate-200 hover:bg-white/10 disabled:opacity-30"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[0.7rem] text-slate-300/80">
+                      Tip: prepend <code className="rounded bg-white/10 px-1 py-[2px] text-white">#mode:brief</code> or <code className="rounded bg-white/10 px-1 py-[2px] text-white">#mode:create</code> to steer Aura instantly.
+                    </p>
                   </div>
+                  <div
+                    ref={chatContainerRef}
+                    className="flex-1 min-h-0 overflow-y-auto space-y-5 pr-2 custom-scrollbar"
+                    role="log"
+                    aria-live="polite"
+                    aria-relevant="additions text"
+                  >
+                    {history.length === 0 && !isLoading && (
+                      <div className="rounded-3xl border border-dashed border-white/10 bg-white/3 px-6 py-10 text-center text-slate-300">
+                        <p className="text-lg font-medium text-white">Your command surface awaits</p>
+                        <p className="mt-2 text-sm text-slate-300/80">
+                          Try “Outline a product launch timeline” or press voice brief to speak directly.
+                        </p>
+                      </div>
+                    )}
+                    {history.map((msg, index) => {
+                      const isUser = msg.role === 'user';
+                      return (
+                        <div key={`${msg.role}-${index}`} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                          <div
+                            className={`max-w-[78%] rounded-3xl px-5 py-4 shadow-[0_18px_36px_rgba(6,12,30,0.35)] transition ${
+                              isUser
+                                ? 'bg-linear-to-br from-indigo-500/80 via-violet-500/75 to-purple-500/80 text-white border border-white/10'
+                                : 'bg-white/5 border border-white/8 backdrop-blur-xl text-slate-100'
+                            }`}
+                          >
+                            <strong className={`block text-xs uppercase tracking-[0.35em] ${isUser ? 'text-white/70' : 'text-indigo-200/80'}`}>
+                              {isUser ? 'You' : 'Aura'}
+                            </strong>
+                            <div className="mt-3 space-y-2">{renderMessageContent(msg)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {isLoading && (
+                      <div className="flex justify-start">
+                        <div className="max-w-[70%] rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-slate-100">
+                          <strong className="block text-xs uppercase tracking-[0.35em] text-indigo-200/80">Aura</strong>
+                          <div className="mt-3 flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-indigo-300 animate-bounce" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-indigo-200 animate-bounce delay-150" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-indigo-100 animate-bounce delay-300" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activePanel === 'briefing' && (
+                <div className="custom-scrollbar h-full min-h-0 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-slate-200/90">
+                  {briefingContent}
+                </div>
+              )}
+
+              {activePanel === 'dictation' && (
+                <div className="flex h-full min-h-0 flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      size="sm"
+                      onClick={startDictation}
+                      disabled={isDictating || isListening || isLoading}
+                      className="rounded-full bg-linear-to-r from-indigo-400/80 to-violet-500/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_8px_24px_rgba(66,77,255,0.35)] hover:brightness-110 disabled:opacity-50"
+                    >
+                      {isDictating ? 'Capturing…' : 'Start Dictation'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={stopDictation}
+                      disabled={!isDictating}
+                      className="rounded-full border-white/20 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.18em]"
+                    >
+                      Stop
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={generateDictationSummary}
+                      disabled={!dictationTranscript.trim()}
+                      className="rounded-full border-white/20 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.18em]"
+                    >
+                      Auto-Summarize
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => injectPrompt(dictationSummary ?? dictationTranscript)}
+                      disabled={!dictationTranscript.trim()}
+                      className="rounded-full px-4 py-2 text-xs uppercase tracking-[0.18em] text-slate-200 hover:text-white"
+                    >
+                      Use as Prompt
+                    </Button>
+                  </div>
+                  <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden">
+                    <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 custom-scrollbar">
+                      <p className="text-xs uppercase tracking-[0.3em] text-slate-300/80">Live transcript</p>
+                      <div className="mt-2 whitespace-pre-wrap">
+                        {dictationTranscript || 'Tap “Start Dictation” to begin recording.'}
+                      </div>
+                    </div>
+                    {dictationSummary && (
+                      <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 p-4 text-sm text-emerald-50">
+                        <p className="text-xs uppercase tracking-[0.3em] text-emerald-200/90">Auto summary</p>
+                        <pre className="mt-2 whitespace-pre-wrap">{dictationSummary}</pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activePanel === 'macros' && (
+                <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto custom-scrollbar">
+                  {macroSequences.map((macro) => (
+                    <div key={macro.name} className="rounded-2xl border border-white/10 bg-white/8 p-4 shadow-[0_18px_34px_rgba(12,17,44,0.4)]">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-white">{macro.name}</p>
+                          <p className="mt-1 text-xs text-slate-300/80">{macro.description}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => injectPrompt(macro.prompt)}
+                          className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em]"
+                        >
+                          Queue
+                        </Button>
+                      </div>
+                      <p className="mt-3 rounded-xl border border-white/8 bg-slate-950/60 px-3 py-2 text-[0.72rem] text-slate-200/90 font-mono">
+                        {macro.prompt}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </section>
-
-          <aside className="flex flex-col gap-8">
-            <section className="glass-panel glimmer flex flex-col overflow-hidden">
-              <div className="border-b border-white/10 px-6 py-5">
-                <p className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Mission intel</p>
-                <h3 className="text-xl font-semibold text-white mt-2">Daily Briefing</h3>
-              </div>
-              <div className="custom-scrollbar flex-1 overflow-y-auto space-y-4 px-6 py-6 text-sm leading-relaxed text-slate-200/90">
-                {briefingContent}
-              </div>
-            </section>
-
-            <section className="glass-panel glimmer flex flex-col gap-6 px-6 py-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Command Console</p>
-                  <h3 className="text-xl font-semibold text-white mt-1">Deploy a new task</h3>
-                </div>
-                <Button
-                  type="button"
-                  onClick={startListening}
-                  disabled={isListening || isLoading}
-                  aria-label={isListening ? 'Aura is currently listening' : 'Activate voice briefing'}
-                  className="group relative overflow-hidden rounded-full border border-white/20 bg-linear-to-r from-indigo-500/80 to-violet-500/80 px-4 py-2 text-sm font-medium text-white shadow-[0_8px_24px_rgba(66,77,255,0.4)] hover:scale-[1.01] transition"
-                >
-                  <span className="absolute inset-0 bg-white/20 opacity-0 transition-opacity duration-200 group-hover:opacity-40"></span>
-                  {isListening ? 'Listening…' : 'Voice Brief'}
-                </Button>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div
-                  className={`cursor-pointer rounded-2xl border border-white/10 bg-linear-to-br ${auraMoodGradient} p-[2px] shadow-[0_14px_34px_rgba(8,14,33,0.45)] transition hover:border-white/20 ${auraMoodPulse}`}
-                  onClick={startListening}
-                  title={isListening ? 'Listening…' : 'Tap to brief Aura with your voice'}
-                >
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
-                    <AuraDoodle
-                      state={getAuraState()}
-                      accessory={modeProfile.accessory}
-                      showTrail={showAuraTrail}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex-1 space-y-3">
-                  <Input
-                    type="text"
-                    value={userInput}
-                    onChange={(e) => {
-                      setUserInput(e.target.value);
-                      setIsTyping(e.target.value.length > 0);
-                    }}
-                    onFocus={() => setIsTyping(userInput.length > 0)}
-                    onBlur={() => setIsTyping(false)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSubmit();
-                    }}
-                    placeholder={isListening ? 'Listening…' : 'Compose your directive'}
-                    className="h-14 rounded-2xl border border-white/10 bg-white/8 px-5 text-base text-slate-100 placeholder:text-slate-400/70 focus-visible:ring-indigo-400"
-                    disabled={isLoading || isListening}
-                  />
-                  <div className="flex items-center gap-3">
-                    <Button
-                    onClick={() => handleSubmit()}
-                    disabled={isLoading || isListening || !userInput.trim()}
-                    aria-live="polite"
-                    aria-busy={isLoading}
-                      className="flex-1 h-11 rounded-xl bg-linear-to-r from-indigo-400 via-violet-500 to-purple-500 text-sm font-semibold text-white shadow-[0_12px_32px_rgba(91,95,255,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isLoading ? 'Synthesizing…' : 'Transmit Command'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        setUserInput('');
-                        setIsTyping(false);
-                      }}
-                      disabled={!userInput && !isTyping}
-                      className="h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-slate-200 hover:bg-white/10 disabled:opacity-30"
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/5 bg-white/4 px-5 py-4 text-xs leading-relaxed text-slate-300/90">
-                Pro tip: prepend your prompt with <code className="rounded bg-white/10 px-1 py-[2px] text-[0.85rem] text-white">#mode:brief</code> or <code className="rounded bg-white/10 px-1 py-[2px] text-[0.85rem] text-white">#mode:create</code> to instantly toggle Aura’s strategy versus generation engines.
-              </div>
-            </section>
-
-            <section className="glass-panel glimmer flex flex-col gap-5 px-6 py-6">
-              <div className="flex flex-col gap-2">
-                <p className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Whisper-to-Write</p>
-                <h3 className="text-xl font-semibold text-white">Long-form dictation studio</h3>
-                <p className="text-sm text-slate-300/80">
-                  Capture extended thoughts, then auto-structure the output into bullet-ready summaries.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  size="sm"
-                  onClick={startDictation}
-                  disabled={isDictating || isListening || isLoading}
-                  className="rounded-full bg-linear-to-r from-indigo-400/80 to-violet-500/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_8px_24px_rgba(66,77,255,0.35)] hover:brightness-110 disabled:opacity-50"
-                >
-                  {isDictating ? 'Capturing…' : 'Start Dictation'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={stopDictation}
-                  disabled={!isDictating}
-                  className="rounded-full border-white/20 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.18em]"
-                >
-                  Stop
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={generateDictationSummary}
-                  disabled={!dictationTranscript.trim()}
-                  className="rounded-full border-white/20 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.18em]"
-                >
-                  Auto-Summarize
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => injectPrompt(dictationSummary ?? dictationTranscript)}
-                  disabled={!dictationTranscript.trim()}
-                  className="rounded-full px-4 py-2 text-xs uppercase tracking-[0.18em] text-slate-200 hover:text-white"
-                >
-                  Use as Prompt
-                </Button>
-              </div>
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-300/80 mb-2">Live transcript</p>
-                  <div className="max-h-32 overflow-y-auto whitespace-pre-wrap text-sm text-slate-200">
-                    {dictationTranscript || 'Tap “Start Dictation” to begin recording.'}
-                  </div>
-                </div>
-                {dictationSummary && (
-                  <div className="rounded-2xl border border-emerald-300/30 bg-emerald-400/10 p-4">
-                    <p className="text-xs uppercase tracking-[0.3em] text-emerald-200/90 mb-2">Auto summary</p>
-                    <pre className="text-sm text-emerald-50 whitespace-pre-wrap">{dictationSummary}</pre>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="glass-panel glimmer flex flex-col gap-5 px-6 py-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.4em] text-slate-400/80">Mission Routines</p>
-                  <h3 className="text-xl font-semibold text-white mt-1">Launch a macro sequence</h3>
-                </div>
-              </div>
-              <div className="flex flex-col gap-4">
-                {macroSequences.map((macro) => (
-                  <div key={macro.name} className="rounded-2xl border border-white/10 bg-white/10 p-4 shadow-[0_18px_34px_rgba(12,17,44,0.4)]">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{macro.name}</p>
-                        <p className="mt-1 text-xs text-slate-300/80">{macro.description}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => injectPrompt(macro.prompt)}
-                        className="rounded-full border-white/20 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.22em]"
-                      >
-                        Queue
-                      </Button>
-                    </div>
-                    <p className="mt-3 rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-[0.72rem] text-slate-200/90 font-mono">
-                      {macro.prompt}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </aside>
         </div>
       </div>
     </main>
